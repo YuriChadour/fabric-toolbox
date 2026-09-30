@@ -8,25 +8,29 @@ Customers may not always clearly distinguish between costs that are included or 
 
 ![FCA](./media/FCASolution.png)
 
-## Introduction
+---
+
+## ✨ Introduction
 
 Fabric Cost Analysis (short: FCA) is a solution to enable holistic monitoring of Microsoft Fabric Cost with the help of Microsoft Fabric.
 
 FCA has the goal to provide a holistic view specified on Microsoft Fabric aspects and particularities (joining Financial and Operational forces) on top of the various information, which can be extracted from Azure Cost Management, personal enriched source of information, … allowing its users to analyze at a very high level, but also to deep dive into specific usage, Azure quotas, reservations and particularity of the platform for a more finer data analysis.
 
-FCA is fully developed utilizing Fabric capabilities, with Pipelines and Notebooks serving as key tools for data extraction and transformation. Data is maintained both in its raw format and as Delta Parquet, allowing users to access it directly through Power BI Direct Lake. FCA includes standard reports that provide an overview of data and allow users to customize or create their own reports using the data model. Fabric's open platform enables integration with external data sources for further analysis as needed.
-
 >⚠️ Caution: The FCA solution accelerator is not an official Microsoft product! It is a solution accelerator, which can help you implement a cost monitoring solution within and for Fabric. Consequently, there is no official support provided, and there remains a potential risk of failures.
 
-🎬 Demo presentation available on YouTube : [Fabric Cost Analysis](https://youtu.be/ZRtxJgFGfi4)
+🎬 Demo presentation available on YouTube : [Fabric Cost Analysis](https://youtu.be/6uOlYj_eSzo)
 
-## Content
+---
 
-### Architecture
+## 🧱 Architecture
+
+FCA is fully developed utilizing Fabric capabilities, with Pipelines and Notebooks serving as key tools for data extraction and transformation. Data is maintained both in its raw format and as Delta Parquet, allowing users to access it directly through Power BI Direct Lake. FCA includes standard reports that provide an overview of data and allow users to customize or create their own reports using the data model. Fabric's open platform enables integration with external data sources for further analysis as needed.
 
 ![FCA](./media/FCASolutionArchitecture.png)
 
-### FCA Inputs
+---
+
+## 📚 FCA Inputs
 
 FCA gathers diverse data in Lakehouse to provide cost insights:
 - FCA extracts Azure Cost in [FOCUS](https://focus.finops.org/) format (a Unified Standard for Cloud Billing Data)
@@ -34,23 +38,25 @@ FCA gathers diverse data in Lakehouse to provide cost insights:
 - (optional) FCA extracts Azure Reservations details
 - (optional) FCA extracts Azure Quotas
 
->ℹ️ FCA will display only data related to Fabric costs, no other Azure cost will be prepare for analyze.
+>ℹ️ FCA will display only data related to Fabric costs, no other Azure cost will be prepared for analysis.
 
-### FCA Outputs
+---
 
-#### Report
+## 🚀 FCA Outputs
+
+### 📊 Report
 
 | **Page Name** | FinOps Phase [🔗](https://learn.microsoft.com/en-us/cloud-computing/finops/framework/finops-framework#lifecycle) | **Purpose**                                                     | **Sample**                                                     |
 | ----- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Home** | Inform | The page presents a summary of key financial metrics, some of which are already included in the cost of capacity, while others are not | Savings Benefits due to RI<br />![Home Page 1](./media/Report_Home1.png)<br />Effect of pausing a capacity having throttling<br />![Home Page 2](./media/Report_Home2.png) |
-| **Summary** | Inform | The page provides an overview of cost per capacities across different regions, helping stakeholders to understand cost distributions and resource allocations within a specified timeframe | ![Summary Page](./media/Report_Summary.png) |
+| **Home** | Inform | The page presents a summary of key financial metrics, some of which are already included in the cost of capacity, while others are not <br /> <br /> 🆕 [Fabric FinOps Maturity Score](./MaturityScore.md) | Savings Benefits due to RI<br />![Home Page 1](./media/Report_Home1.png)<br />Effect of pausing a capacity having throttling<br />![Home Page 2](./media/Report_Home2.png) |
+| **Summary** | Inform | The page provides an overview of cost per capacities across different regions, helping stakeholders to understand cost distributions and resource allocations within a specified timeframe| ![Summary Page](./media/Report_Summary.png) |
 | **Capacity Usage** | Optimize | The page is designed to enhance efficiency by illustrating how capacity is being utilized, enabling stakeholders to monitor and optimize resource allocation effectively | ![Capacity Usage Page](./media/Report_CapacityUsage.png) |
 | **Reservation** | Optimize | The page aims to reduce cloud waste by providing a comprehensive view of reservation-related data to verify the total usage of the reservation across the different capacities and a specified timeframe | ![Reservation Page](./media/Report_Reservation.png) |
 | **Cost Detail** | Operate | The page offers a detailed view of cost distributions across different categories and resources and includes Year-to-Date calculations to help stakeholders to define, track, and monitor expenses effectively | ![Cost Details Page](./media/Report_CostDetails.png) |
 | **Quota** | Operate | The page offers a detailed view of Azure Quotas per subscriptions | ![Azure Quotas Page](./media/AzureQuotas.png) |
 | **Support** |                                                              | This page is designed to facilitate the learning and comprehension of the specific aspects of fabric costs and the contents of this report | ![Support Page](./media/Report_Support.png) |
 
-#### Data Agent
+### 🤖 Data Agent
 
 With a Data Agent on top of the FCA semantic model you can query in natural language Fabric Cost.
 
@@ -62,13 +68,30 @@ And from Teams:
 
 ![FCA Data Agent from Teams](./media/AgentFromTeams.png)
 
-## Setup
+---
+
+## 📦 Setup
 
 🏃‍♂️‍➡️ Are you ready to try FCA?
 
 ➡️ [Click here to deploy or update FCA](./Deploy.md)
 
-## Support
+🆕 FCA can also be deployed via Fabric Jumpstart : https://jumpstart.fabric.microsoft.com/
+
+---
+
+## 💰 Solution Cost (CU Usage)
+
+Running FCA itself consumes Fabric capacity (CUs) to execute its pipelines and notebooks. Based on real customer deployments, here is a representative example of FCA cost:
+
+- **Sample configuration**: 4 regions, 50 capacities, 13 reservations (RIs), daily pipeline execution, data reload over 2 months (current + previous)
+- **Observed impact**: ~2% of an F4 capacity, slightly above ~6,000 CUs per day
+
+Overall, even at this scale, FCA remains a lightweight solution with a predictable and limited capacity footprint.
+
+---
+
+## 🐞 Support
 
 The FCA solution accelerator template is not an official Microsoft service.
 
@@ -77,3 +100,28 @@ Ideas/Suggestions: Submit ideas and suggestions as issues in this repository.
 Bug Reports: A backlog is maintained on the project issues page. If you encounter problems or have suggestions, add an entry to the issues section.
 
 Important: Support tickets should not be opened for issues related to these templates. For any questions or concerns about the templates, create an issue in this repository.
+
+---
+
+## 🤝 Community Content
+
+Below is a curated list of blog posts, sessions and articles that dive deeper into the use cases, design choices, and benefits of FCA solution.
+
+- 📖 **fabricbook.net** – community knowledge hub around Microsoft Fabric: <https://fabricbook.net/>
+- ✍️ **Chris Webb (Crossjoin blog)** – *Monitor Fabric costs with Fabric Cost Analysis* (Oct 2025): <https://blog.crossjoin.co.uk/2025/10/19/monitor-fabric-costs-with-fabric-cost-analysis/>
+- ✍️ **James Serra** – *Fabric Cost Analysis (FCA)* (Dec 2025): <https://www.jamesserra.com/archive/2025/12/fabric-cost-analysis-fca/>
+- ✍️ **Rob Sewell** – *FCA: Fabric Cost Analysis for FinOps*: <https://blog.robsewell.com/blog/fca-fabric-cost-analysis-for-finops/>
+- ✍️ **SQLYard** – *Fabric Cost Analysis explained: bringing clarity to Microsoft Fabric costs* (Jan 2026): <https://sqlyard.com/2026/01/12/fabric-cost-analysis-explained-bringing-clarity-to-microsoft-fabric-costs/>
+- 💬 **Microsoft Fabric Community Blog** – *Fabric Cost Analysis: Shine a light on your platform costs*: <https://community.fabric.microsoft.com/t5/Fabric-platform-Community-Blog/Fabric-Cost-Analysis-Shine-a-light-on-your-platform-costs/ba-p/4907392>
+- 🎤 **LinkedIn Event (FR)** – *Fabric Cost Analysis : comprendre…*: <https://www.linkedin.com/events/fabriccostanalysis-comprendre-m7394636250466578432/>
+- 📚 **Packt book** – *The Definitive Guide to Microsoft Fabric*: <https://www.packtpub.com/en-us/product/the-definitive-guide-to-microsoft-fabric-9781806698790>
+- ▶️ **YouTube playlist** – Fabric Cost Analysis walkthrough series: <https://www.youtube.com/watch?v=6uOlYj_eSzo&list=PLmmHlkXlpkYZNAQRj4IOhb6usUvkGYj34>
+- ▶️ **YouTube playlist** – Fabric Cost Analysis walkthrough (alternate series): <https://www.youtube.com/watch?v=PJSZWTfUfc0&list=PLiYSIjh4cEx0dd7gkLFu2pjDqUkYGv_mU>
+- ✍️ **Iurii (Yurri) Iurchenko on LinkedIn** – *FabCon 2026 recap: AI, business, people*: <https://www.linkedin.com/pulse/fabcon-2026-recap-ai-business-people-iurii-yurri-iurchenko-fachdm-6uavc/>
+- ✍️ **Junco Boquer on LinkedIn** – *The economics of modern data platforms with Microsoft Fabric*: <https://www.linkedin.com/pulse/economics-modern-data-platforms-microsoft-fabric-vs-junco-boquer-3dtge/>
+- ✍️ **Element61** – *Fabric Cost Analysis: bringing transparency to Microsoft Fabric spend*: <https://www.element61.be/en/resource/fabric-cost-analysis-bringing-transparency-microsoft-fabric-spend>
+- 📺 **YouTube live session** on Fabric Cost Analysis: <https://www.youtube.com/live/KxRPZpxJZ0I>
+
+---
+
+**Built with ❤️ for the Microsoft Fabric community**

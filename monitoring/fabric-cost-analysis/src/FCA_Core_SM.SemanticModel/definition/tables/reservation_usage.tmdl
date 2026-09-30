@@ -48,19 +48,6 @@ table reservation_usage
 
 		annotation SummarizationSetBy = Automatic
 
-	column SubAccountId
-		dataType: string
-		isHidden
-		sourceProviderType: varchar(8000)
-		lineageTag: 8d5331c6-d4fa-4cbe-b55b-d4483cc6cfe7
-		sourceLineageTag: SubAccountId
-		summarizeBy: none
-		sourceColumn: SubAccountId
-
-		changedProperty = IsHidden
-
-		annotation SummarizationSetBy = Automatic
-
 	column ReservationOrderId
 		dataType: string
 		sourceProviderType: varchar(8000)
@@ -244,6 +231,15 @@ table reservation_usage
 		sourceColumn: UsageDate_key
 
 		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column SubId
+		dataType: string
+		lineageTag: 2612618d-537f-409d-9ad8-92f88c117087
+		sourceLineageTag: SubId
+		summarizeBy: none
+		sourceColumn: SubId
 
 		annotation SummarizationSetBy = Automatic
 

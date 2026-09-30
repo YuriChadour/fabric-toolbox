@@ -1,0 +1,713 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <h1>⚡ Data Engineering View</h1>
+    <p>Notebooks, clusters, and jobs</p>
+</div>
+
+<!-- Summary Stats -->
+<div class="row">
+    <div class="col">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-nb">{{ engineering.notebooks | length }}</div>
+            <div class="stat-label">Notebooks</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card databricks">
+            <div class="stat-value" id="stat-cl">{{ engineering.clusters | length }}</div>
+            <div class="stat-label">Clusters</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card">
+            <div class="stat-value" id="stat-jobs">{{ engineering.jobs | length }}</div>
+            <div class="stat-label">Jobs</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card" style="border-left: 4px solid #107c10;">
+            <div class="stat-value" id="stat-active-jobs">{{ engineering.active_jobs | default(0) }}</div>
+            <div class="stat-label">Active Jobs</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="stat-card" style="border-left: 4px solid #a19f9d;">
+            <div class="stat-value" id="stat-stale-jobs">{{ engineering.stale_jobs | default(0) }}</div>
+            <div class="stat-label">Stale Jobs</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mt-2">
+    {% if engineering.notebook_languages %}
+    <div class="col col-6">
+        <div class="card">
+            <div class="card-header">Notebooks by Language</div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="notebookLangChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if engineering.spark_versions %}
+    <div class="col col-6">
+        <div class="card">
+            <div class="card-header">Spark Versions Distribution</div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="sparkVersionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Job Activity & Notebook Usage Charts -->
+<div class="row mt-2">
+    {% if engineering.active_jobs is defined or engineering.stale_jobs is defined %}
+    <div class="col col-6">
+        <div class="card">
+            <div class="card-header">Job Activity (last 30 days)</div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="jobActivityChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if engineering.notebooks_referenced_by_jobs is defined %}
+    <div class="col col-6">
+        <div class="card">
+            <div class="card-header">Notebooks Referenced by Jobs</div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="notebookRefChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Notebooks List -->
+<div class="card">
+    <div class="card-header">📓 Notebooks
+        {% if engineering.notebooks | length > 10 %}
+        <a href="notebooks_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.notebooks | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if engineering.notebooks %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Language</th>
+                        <th class="text-right">Size (KB)</th>
+                        <th>Uses dbutils</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nb in engineering.notebooks[:10] %}
+                    <tr data-workspace="{{ nb.workspace | default('N/A') }}">
+                        <td>{{ nb.name | default(nb.path | default('Unknown')) }}</td>
+                        <td>
+                            <span class="badge badge-secondary">
+                                {{ nb.language | default(nb.default_language | default('N/A')) }}
+                            </span>
+                        </td>
+                        <td class="text-right">
+                            {% set _sz = nb.size %}
+                            {% if _sz is number and _sz > 0 %}
+                                {{ '%.1f' | format(_sz / 1024) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if nb.uses_dbutils %}
+                            <span class="badge" style="background-color: #ffc107; color: #000;">Yes</span>
+                            {% else %}
+                            <span class="badge badge-secondary">No</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ nb.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.notebooks | length > 10 %}
+                    <tr>
+                        <td colspan="5" class="text-muted">
+                            <a href="notebooks_page_1.html">... and {{ engineering.notebooks | length - 10 }} more notebooks →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No notebooks found.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Clusters: All-Purpose Compute + Job Clusters (latest per source) -->
+{% if engineering.clusters %}
+{% set _all_purpose = engineering.clusters | rejectattr('cluster_source', 'equalto', 'JOB') | list %}
+{% set _job_clusters_raw = engineering.clusters | selectattr('cluster_source', 'equalto', 'JOB') | list %}
+{% set _by_source = {} %}
+{% for cl in _job_clusters_raw %}
+    {% set _name = cl.cluster_name or '' %}
+    {% set _src_key = (cl.workspace | default('')) ~ '|' ~ (_name.split('-run-')[0] if '-run-' in _name else _name) %}
+    {% set _existing = _by_source.get(_src_key) %}
+    {% if not _existing or (cl.start_time or '') > (_existing.start_time or '') %}
+        {% set _ = _by_source.update({_src_key: cl}) %}
+    {% endif %}
+{% endfor %}
+{% set _job_clusters = _by_source.values() | list %}
+
+<div class="card">
+    <div class="card-header">🖥️ All-Purpose Compute
+        {% if engineering.clusters | length > 10 %}
+        <a href="clusters_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.clusters | length }} clusters →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        {% if _all_purpose %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>State</th>
+                        <th>Node Type</th>
+                        <th class="text-right">Cores</th>
+                        <th class="text-right">Memory (MB)</th>
+                        <th>Spark Version</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cl in _all_purpose[:10] %}
+                    <tr data-workspace="{{ cl.workspace | default('N/A') }}">
+                        <td>{{ cl.cluster_name | default('Unknown') }}</td>
+                        <td>
+                            <span class="badge {% if cl.state == 'RUNNING' %}badge-success{% elif cl.state == 'TERMINATED' %}badge-secondary{% else %}badge-warning{% endif %}">
+                                {{ cl.state | default('Unknown') }}
+                            </span>
+                        </td>
+                        <td>{{ cl.node_type_id | default('N/A') }}</td>
+                        <td class="text-right">{{ cl.cluster_cores | default('N/A') }}</td>
+                        <td class="text-right">{{ cl.cluster_memory_mb | default('N/A') | format_number }}</td>
+                        <td><span class="badge badge-secondary">{{ cl.spark_version | default('N/A') }}</span></td>
+                        <td>{{ cl.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if _all_purpose | length > 10 %}
+                    <tr>
+                        <td colspan="7" class="text-muted">
+                            <a href="clusters_page_1.html">... and {{ _all_purpose | length - 10 }} more clusters →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No all-purpose clusters.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">⚙️ Job Clusters — latest per source</div>
+    <div class="card-body">
+        {% if _job_clusters %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Name</th>
+                        <th>Node Type</th>
+                        <th>Spark Version</th>
+                        <th>Last Started</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cl in _job_clusters %}
+                    {% set _name = cl.cluster_name or '' %}
+                    {% set _src = _name.split('-run-')[0] if '-run-' in _name else _name %}
+                    <tr data-workspace="{{ cl.workspace | default('N/A') }}">
+                        <td><code>{{ _src }}</code></td>
+                        <td>{{ _name | default('Unknown') }}</td>
+                        <td>{{ cl.node_type_id | default('N/A') }}</td>
+                        <td><span class="badge badge-secondary">{{ cl.spark_version | default('N/A') }}</span></td>
+                        <td>{{ cl.start_time | default('N/A', true) }}</td>
+                        <td>{{ cl.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No job clusters.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Jobs -->
+{% if engineering.jobs %}
+<div class="card">
+    <div class="card-header">📋 Jobs
+        {% if engineering.jobs | length > 10 %}
+        <a href="jobs_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.jobs | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Job ID</th>
+                        <th class="text-right">Tasks</th>
+                        <th class="text-right">Avg duration (last 3 runs)</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in engineering.jobs[:10] %}
+                    <tr data-workspace="{{ job.workspace | default('N/A') }}">
+                        <td>{{ job.name | default((job.settings.name if job.settings is mapping else None) | default('Unknown', true)) }}</td>
+                        <td>{{ job.job_id | default('Unknown') }}</td>
+                        <td class="text-right">{{ job.tasks | length if job.tasks else 0 }}</td>
+                        <td class="text-right">
+                            {% set _avg = job.avg_duration_ms_last_3_runs %}
+                            {% if _avg is number and _avg > 0 %}
+                                {{ '%.1f' | format(_avg / 1000) }} s
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ job.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.jobs | length > 10 %}
+                    <tr>
+                        <td colspan="5" class="text-muted">
+                            <a href="jobs_page_1.html">... and {{ engineering.jobs | length - 10 }} more jobs →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- DLT Pipelines -->
+{% if engineering.pipelines %}
+<div class="card">
+    <div class="card-header">🔄 DLT Pipelines
+        {% if engineering.pipelines | length > 10 %}
+        <a href="pipelines_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.pipelines | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>State</th>
+                        <th>Creator</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in engineering.pipelines[:10] %}
+                    <tr data-workspace="{{ p.workspace | default('N/A') }}">
+                        <td>{{ p.name | default(p.pipeline_id | default('Unknown')) }}</td>
+                        <td>
+                            <span class="badge {% if p.state == 'RUNNING' %}badge-success{% elif p.state == 'IDLE' %}badge-secondary{% else %}badge-warning{% endif %}">
+                                {{ p.state | default('Unknown') }}
+                            </span>
+                        </td>
+                        <td>{{ p.creator_user_name | default('N/A') }}</td>
+                        <td>{{ p.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.pipelines | length > 10 %}
+                    <tr>
+                        <td colspan="4" class="text-muted">
+                            <a href="pipelines_page_1.html">... and {{ engineering.pipelines | length - 10 }} more pipelines →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- MLflow Experiments -->
+{% if engineering.experiments %}
+<div class="card">
+    <div class="card-header">🧪 MLflow Experiments
+        {% if engineering.experiments | length > 10 %}
+        <a href="experiments_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.experiments | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Lifecycle Stage</th>
+                        <th>Last Updated</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for exp in engineering.experiments[:10] %}
+                    <tr data-workspace="{{ exp.workspace | default('N/A') }}">
+                        <td>{{ exp.name | default('Unknown') }}</td>
+                        <td>
+                            <span class="badge {% if exp.lifecycle_stage == 'active' %}badge-success{% else %}badge-secondary{% endif %}">
+                                {{ exp.lifecycle_stage | default('N/A') }}
+                            </span>
+                        </td>
+                        <td>{{ exp.last_update_time | default('N/A') }}</td>
+                        <td>{{ exp.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.experiments | length > 10 %}
+                    <tr>
+                        <td colspan="4" class="text-muted">
+                            <a href="experiments_page_1.html">... and {{ engineering.experiments | length - 10 }} more experiments →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Serving Endpoints -->
+{% if engineering.serving_endpoints %}
+<div class="card">
+    <div class="card-header">🚀 Model Serving Endpoints
+        {% if engineering.serving_endpoints | length > 10 %}
+        <a href="serving_endpoints_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.serving_endpoints | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>State</th>
+                        <th>Creator</th>
+                        <th>Created</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ep in engineering.serving_endpoints[:10] %}
+                    <tr data-workspace="{{ ep.workspace | default('N/A') }}">
+                        <td>{{ ep.name | default('Unknown') }}</td>
+                        <td>
+                            <span class="badge {% if ep.state == 'READY' %}badge-success{% else %}badge-secondary{% endif %}">
+                                {{ ep.state | default('N/A') }}
+                            </span>
+                        </td>
+                        <td>{{ ep.creator | default('N/A') }}</td>
+                        <td>{{ ep.creation_timestamp | default('N/A') }}</td>
+                        <td>{{ ep.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.serving_endpoints | length > 10 %}
+                    <tr>
+                        <td colspan="5" class="text-muted">
+                            <a href="serving_endpoints_page_1.html">... and {{ engineering.serving_endpoints | length - 10 }} more endpoints →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Git Repos -->
+{% if engineering.repos %}
+<div class="card">
+    <div class="card-header">📂 Git Repos
+        {% if engineering.repos | length > 10 %}
+        <a href="repos_page_1.html" style="float:right; font-size:0.85em;">View all {{ engineering.repos | length }} →</a>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Provider</th>
+                        <th>Branch</th>
+                        <th>Workspace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in engineering.repos[:10] %}
+                    <tr data-workspace="{{ r.workspace | default('N/A') }}">
+                        <td>{{ r.path | default('Unknown') }}</td>
+                        <td>{{ r.provider | default('N/A') }}</td>
+                        <td>{{ r.branch | default('N/A') }}</td>
+                        <td>{{ r.workspace | default('N/A') }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if engineering.repos | length > 10 %}
+                    <tr>
+                        <td colspan="4" class="text-muted">
+                            <a href="repos_page_1.html">... and {{ engineering.repos | length - 10 }} more repos →</a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="mt-2">
+    <a href="{{ base_path }}index.html">← Back to Overview</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Per-workspace data for dynamic filtering
+const engineeringData = {
+{% for ws_name, ws in workspaces.items() %}
+    "{{ ws_name }}": {
+        notebooks: {{ ws.summary.counts.notebooks | default(0) }},
+        clusters: {{ ws.summary.counts.clusters | default(0) }},
+        jobs: {{ ws.summary.counts.jobs | default(0) }}
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+};
+
+// Per-workspace notebook language counts
+const nbLangByWorkspace = {};
+{% for nb in engineering.notebooks %}
+(function() {
+    const ws = "{{ nb.workspace | default('') }}";
+    const lang = "{{ nb.language | default(nb.default_language | default('Unknown')) }}";
+    if (!nbLangByWorkspace[ws]) nbLangByWorkspace[ws] = {};
+    nbLangByWorkspace[ws][lang] = (nbLangByWorkspace[ws][lang] || 0) + 1;
+})();
+{% endfor %}
+
+// Per-workspace job activity (active/stale based on latest_runs presence)
+const jobActivityByWorkspace = {};
+{% for job in engineering.jobs %}
+(function() {
+    const ws = "{{ job.workspace | default('') }}";
+    if (!jobActivityByWorkspace[ws]) jobActivityByWorkspace[ws] = { active: 0, stale: 0 };
+    {% set _runs = job.latest_runs if job.latest_runs is mapping else {} %}
+    {% set _run_list = _runs.runs if _runs is mapping and _runs.runs else [] %}
+    {% if _run_list %}
+    jobActivityByWorkspace[ws].active += 1;
+    {% else %}
+    jobActivityByWorkspace[ws].stale += 1;
+    {% endif %}
+})();
+{% endfor %}
+
+// Per-workspace notebook reference counts
+const nbRefByWorkspace = {};
+{% for nb in engineering.notebooks %}
+(function() {
+    const ws = "{{ nb.workspace | default('') }}";
+    if (!nbRefByWorkspace[ws]) nbRefByWorkspace[ws] = { referenced: 0, not_referenced: 0 };
+    {% if nb.executed_by_jobs %}
+    nbRefByWorkspace[ws].referenced += 1;
+    {% else %}
+    nbRefByWorkspace[ws].not_referenced += 1;
+    {% endif %}
+})();
+{% endfor %}
+
+// Per-workspace spark version counts
+const sparkVersionsByWorkspace = {};
+{% for cl in engineering.clusters %}
+(function() {
+    const ws = "{{ cl.workspace | default('') }}";
+    const ver = "{{ cl.spark_version | default('Unknown') }}";
+    if (!sparkVersionsByWorkspace[ws]) sparkVersionsByWorkspace[ws] = {};
+    sparkVersionsByWorkspace[ws][ver] = (sparkVersionsByWorkspace[ws][ver] || 0) + 1;
+})();
+{% endfor %}
+
+function updateFilteredStats(selectedWorkspaces) {
+    let nb = 0, cl = 0, jobs = 0;
+    selectedWorkspaces.forEach(ws => {
+        const data = engineeringData[ws];
+        if (data) {
+            nb += data.notebooks || 0;
+            cl += data.clusters || 0;
+            jobs += data.jobs || 0;
+        }
+    });
+    document.getElementById('stat-nb').textContent = nb;
+    document.getElementById('stat-cl').textContent = cl;
+    document.getElementById('stat-jobs').textContent = jobs;
+    updateFilteredCharts(selectedWorkspaces);
+}
+
+const colors = ['#0078d4', '#107c10', '#5c2d91', '#ff8c00', '#008272', '#d83b01', '#e81123', '#00bcf2', '#8764b8', '#00b294'];
+
+let nbLangChart = null;
+let sparkVersionChart = null;
+let jobActivityChart = null;
+let nbRefChart = null;
+
+{% if engineering.notebook_languages %}
+const nbLangCtx = document.getElementById('notebookLangChart');
+if (nbLangCtx) {
+    nbLangChart = new Chart(nbLangCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ engineering.notebook_languages.keys() | list | tojson }},
+            datasets: [{
+                data: {{ engineering.notebook_languages.values() | list | tojson }},
+                backgroundColor: colors.slice(0, {{ engineering.notebook_languages | length }})
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+}
+{% endif %}
+
+{% if engineering.spark_versions %}
+const sparkCtx = document.getElementById('sparkVersionChart');
+if (sparkCtx) {
+    sparkVersionChart = new Chart(sparkCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ engineering.spark_versions.keys() | list | tojson }},
+            datasets: [{ label: 'Count', data: {{ engineering.spark_versions.values() | list | tojson }}, backgroundColor: '#ff3621' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+{% endif %}
+
+{% if engineering.active_jobs is defined or engineering.stale_jobs is defined %}
+const jobActCtx = document.getElementById('jobActivityChart');
+if (jobActCtx) {
+    jobActivityChart = new Chart(jobActCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Active (last 30 days)', 'Stale'],
+            datasets: [{ data: [{{ engineering.active_jobs | default(0) }}, {{ engineering.stale_jobs | default(0) }}], backgroundColor: ['#107c10', '#a19f9d'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+}
+{% endif %}
+
+{% if engineering.notebooks_referenced_by_jobs is defined %}
+const nbRefCtx = document.getElementById('notebookRefChart');
+if (nbRefCtx) {
+    nbRefChart = new Chart(nbRefCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Referenced by jobs', 'Not referenced'],
+            datasets: [{ data: [{{ engineering.notebooks_referenced_by_jobs | default(0) }}, {{ engineering.notebooks_not_referenced | default(0) }}], backgroundColor: ['#0078d4', '#a19f9d'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+}
+{% endif %}
+
+function updateFilteredCharts(selectedWorkspaces) {
+    // Update notebook language chart
+    if (nbLangChart) {
+        const filteredLangs = {};
+        selectedWorkspaces.forEach(ws => {
+            const wsLangs = nbLangByWorkspace[ws] || {};
+            Object.entries(wsLangs).forEach(([lang, count]) => {
+                filteredLangs[lang] = (filteredLangs[lang] || 0) + count;
+            });
+        });
+        nbLangChart.data.labels = Object.keys(filteredLangs);
+        nbLangChart.data.datasets[0].data = Object.values(filteredLangs);
+        nbLangChart.data.datasets[0].backgroundColor = colors.slice(0, Object.keys(filteredLangs).length);
+        nbLangChart.update();
+    }
+
+    // Update spark versions chart
+    if (sparkVersionChart) {
+        const filteredVersions = {};
+        selectedWorkspaces.forEach(ws => {
+            const wsVersions = sparkVersionsByWorkspace[ws] || {};
+            Object.entries(wsVersions).forEach(([ver, count]) => {
+                filteredVersions[ver] = (filteredVersions[ver] || 0) + count;
+            });
+        });
+        sparkVersionChart.data.labels = Object.keys(filteredVersions);
+        sparkVersionChart.data.datasets[0].data = Object.values(filteredVersions);
+        sparkVersionChart.update();
+    }
+
+    // Update job activity chart
+    if (jobActivityChart) {
+        let active = 0, stale = 0;
+        selectedWorkspaces.forEach(ws => {
+            const d = jobActivityByWorkspace[ws] || {};
+            active += d.active || 0;
+            stale += d.stale || 0;
+        });
+        jobActivityChart.data.datasets[0].data = [active, stale];
+        jobActivityChart.update();
+    }
+
+    // Update notebook reference chart
+    if (nbRefChart) {
+        let referenced = 0, notReferenced = 0;
+        selectedWorkspaces.forEach(ws => {
+            const d = nbRefByWorkspace[ws] || {};
+            referenced += d.referenced || 0;
+            notReferenced += d.not_referenced || 0;
+        });
+        nbRefChart.data.datasets[0].data = [referenced, notReferenced];
+        nbRefChart.update();
+    }
+}
+</script>
+{% endblock %}

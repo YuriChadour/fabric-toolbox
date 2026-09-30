@@ -1,6 +1,6 @@
 # Deploy
 
-🎬 Setup demo available on YouTube: [Fabric Cost Analysis - Deployment](https://youtu.be/ehxiauTPvkA)
+🎬 Setup demo available on YouTube: [Fabric Cost Analysis - Deployment](https://youtu.be/0ZPH_gp_GTw)
 
 > Since not all users will be interested in analyzing reservations or quotas, nor in using a Data Agent on top of the FCA, we have added additional optional steps that can be followed during the initial deployment or added later.
 
@@ -10,13 +10,13 @@
 
 ### 1.1 - Cost FOCUS Data
 
-🚩 If you've already deployed [FinOps hubs](https://learn.microsoft.com/en-us/cloud-computing/finops/toolkit/hubs/finops-hubs-overview), you can plug the FCA on top and so you can skip this 1.1 steps.
+🚩 If you've already deployed [FinOps hubs](https://learn.microsoft.com/en-us/cloud-computing/finops/toolkit/hubs/finops-hubs-overview), you can plug the FCA on top and so you can skip step 1.1.
 
 To create an export (Create [Cost Management exports](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#create-exports)) the [Cost Management Contributor role](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/understand-work-scopes#roles-used-in-cost-management-on-rbac-scopes) will be required.
 
 >ℹ️ Azure Cost export is available for various Azure account types, including Enterprise Agreement (EA) and Microsoft Customer Agreement (MCA) customers. To view the full list of supported account types, see [Understand Cost Management data](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/understand-cost-mgt-data).
 
-An Azure Data Lake Storage Gen2 is necessary for saving exported data, the following steps outline how to create a storage account: [Create a storage account](https://learn.microsoft.com/en-us/azure/storage/blobs/create-data-lake-storage-account).
+An Azure Data Lake Storage Gen2 (or an Azure Blob Storage) is necessary for saving exported data, the following steps outline how to create a storage account: [Create a storage account](https://learn.microsoft.com/en-us/azure/storage/blobs/create-data-lake-storage-account). 
 
 Once Data Lake Gen 2 storage account created here are the high levels steps to create an export:
 - Sign into the Azure portal at [https://portal.azure.com](https://portal.azure.com/), search for **Cost Management**
@@ -47,22 +47,50 @@ Once Data Lake Gen 2 storage account created here are the high levels steps to c
 >
 > ![Historical data in one-month chunks export](./media/ChunkExport.png)
 
+ℹ️ Focus data access will be made by the use of **one shortcut**. To be able to support focus data export from **multiple subscriptions or resource groups**, you will need to export them in the same storage account with the same folder structure.
+
+For example you can export data in to Container/focus folder with the following structure:
+
+Container/focus/  <-- Shortcut target<br>
+├── sub1/<br>
+│   ├── 20260101-20260131/<br>
+│   │   ├── Guid/<br>
+│   │   │   ├── *.parquet<br>
+│   ├── 20260201-20260128/<br>
+│   │   ├── Guid/<br>
+│   │   │   ├── *.parquet<br>
+├── sub2/<br>
+│   ├── 20260101-20260131/<br>
+│   │   ├── Guid/<br>
+│   │   │   ├── *.parquet<br>
+│   ├── 20260201-20260128/<br>
+│   │   ├── Guid/<br>
+│   │   │   ├── *.parquet<br>
+
+You are free to use your own folder structure. The ingestion process dynamically detects the number of folders before and after the YYYYMMDD-YYYYMMDD directory. The only requirement is to keep the same structure across all Focus exports.
+
 ## 2 - Configure Fabric items
 
 - In Microsoft Fabric portal, create a new workspace "FCA" (name can be changed), which is backed by a capacity (Trial, P# or F#)
 - Download the ([Workspace logo](./media/FCA%20Logo%20Small.png)) and add the logo to the workspace
 - You can configure the Workspace to allow the share of a high concurrency session during the pipeline execution to limit the Spark vCore needs during the execution of parallel notebooks
   ![alt text](./media/pipelinehc.png)
-- Download and import the **[00_Deploy_FCA.ipynb](./script/00_Deploy_FCA.ipynb)** Notebook into your FCA workspace ([Import existing notebooks](https://learn.microsoft.com/en-us/fabric/data-engineering/how-to-use-notebook#import-existing-notebooks))
+
+- 🚩 Download and import the ➡️   **[00_Deploy_FCA.ipynb](./script/00_Deploy_FCA.ipynb)**   ⬅️ Notebook into your FCA workspace ([Import existing notebooks](https://learn.microsoft.com/en-us/fabric/data-engineering/how-to-use-notebook#import-existing-notebooks)) (unless you deployed the solution via the Jumpstart)
+
 - Click "Run All" in the Notebook
 
 ![FCA](./media/Setup-Export7.png)
+
+ℹ️ If you see a warning about "Missing permissions on the existing connection", please contact the administrator to request the required user permissions.
+The Quota pipeline cannot be activated until the permissions are granted and the deployment is re-run.
 
 - Navigate to your FCA Workspace and refresh the browser to view the newly created artifacts
 
 ![FCA](./media/Setup-Export6.png)
 
-- Create a new File Shortcut on the FCA Lakehouse ([Create an Azure Data Lake Storage Gen2 shortcut](https://learn.microsoft.com/en-us/fabric/onelake/create-adls-shortcut))
+- Create a new File Shortcut on the FCA Lakehouse ([Create an Azure Data Lake Storage Gen2 shortcut](https://learn.microsoft.com/en-us/fabric/onelake/create-adls-shortcut) or [Create an Azure Blob Storage shortcut](https://learn.microsoft.com/en-us/fabric/onelake/create-blob-shortcut))
+  - ‼️The user must have the Storage Blob Data Contributor role assigned
   - Select the ellipsis (**...**) next to **Files**
   - Select **New shortcut**
   - Select Azure Data Lake Storage Gen 2 and provide the following settings:
@@ -124,7 +152,7 @@ Steps to create the Data Agent:
 - Navigate to your FCA Workspace and refresh the browser to view the newly created artifact *FCA_Agent* and open it to chat with your data
 - Enhance custom agents in Microsoft Copilot Studio by leveraging insights from FCA Fabric Data Agent and chat in Teams, as demonstrated in following video: https://www.youtube.com/watch?v=GCtk2HPxZi8
 
-# Update
+## Update
 
 To update FCA (Fabric Cost Analysis) to the latest version, follow the documented steps below.
 
@@ -140,12 +168,13 @@ To update FCA (Fabric Cost Analysis) to the latest version, follow the documente
 Steps to update:
 
 - 1 - Download the latest version of the **[00_Deploy_FCA.ipynb](./script/00_Deploy_FCA.ipynb)** Notebook
-- 2 - Remove the old "00_Deploy_FCA" Notebook from your workspace
+- 2 - Remove the existing "00_Deploy_FCA" Notebook from your workspace
 - 3 - Import the updated notebook into your FCA workspace
 - 4 - Run the 00_Deploy_FCA.ipynb Notebook
-- 5 - Update Pipeline parameters
-- 6 - Open PBI report
+- 5 - Update the pipeline activities and parameters as needed (Running the notebook overwrites existing objects and resets pipeline parameters to their default values. Any custom changes will need to be reapplied)
+- 6 - Run the pipeline and then open the Power BI report.
 
 >ℹ️ This notebook is designed to initially deploy or update all the items in your FCA workspace. You do not need to manually run the Load FCA E2E pipeline after an update. During the next pipeline run, FCA will also check and update the status of your FCA version on the first page of the FCA_Core_Report:
 
 ![FCA](./media/VersionUpdate.png)
+
